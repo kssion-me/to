@@ -1,4 +1,4 @@
-package relay
+package to
 
 import (
 	"bytes"
@@ -408,7 +408,8 @@ func (cid ConnectorID) String() string {
 //
 //	ID - 16-byte tunnel ID for request or connector ID for response.
 type TunnelFeature struct {
-	ID [16]byte
+	ID        [16]byte
+	Subdomain string
 }
 
 func (f *TunnelFeature) Type() FeatureType {
@@ -418,6 +419,14 @@ func (f *TunnelFeature) Type() FeatureType {
 func (f *TunnelFeature) Encode() ([]byte, error) {
 	var buf bytes.Buffer
 	buf.Write(f.ID[:])
+	l := len(f.Subdomain)
+	if l > 0xFF {
+		return nil, errors.New("subdomain maximum length exceeded")
+	}
+	if l > 0 {
+		buf.WriteByte(uint8(l))
+		buf.WriteString(f.Subdomain)
+	}
 	return buf.Bytes(), nil
 }
 
@@ -425,6 +434,15 @@ func (f *TunnelFeature) Decode(b []byte) error {
 	if len(b) < tunnelIDLen {
 		return ErrShortBuffer
 	}
-	copy(f.ID[:], b)
+	pos := tunnelIDLen
+	copy(f.ID[:], b[:pos])
+	if len(b) > pos {
+		Len := int(b[pos])
+		pos += 1
+		if len(b[pos:]) < Len {
+			return ErrShortBuffer
+		}
+		f.Subdomain = string(b[pos : pos+Len])
+	}
 	return nil
 }
